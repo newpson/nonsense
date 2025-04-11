@@ -7,6 +7,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_subdirectory(eval)
 
+add_executable(app-tridiag)
+target_sources(app-tridiag
+    PRIVATE
+    tridiag.cpp)
+target_link_libraries(app-tridiag
+    PUBLIC
+    evaluator)
+
 add_executable(app-polyline)
 target_sources(app-polyline
     PRIVATE
@@ -15,13 +23,13 @@ target_link_libraries(app-polyline
     PUBLIC
     evaluator)
 
-add_executable(app-parabola)
-target_sources(app-parabola
-    PRIVATE
-    parabola.cpp)
-target_link_libraries(app-parabola
-    PUBLIC
-    evaluator)
+# add_executable(app-parabola)
+# target_sources(app-parabola
+#     PRIVATE
+#     parabola.cpp)
+# target_link_libraries(app-parabola
+#     PUBLIC
+#     evaluator)
 
 add_executable(app-golden)
 target_sources(app-golden
