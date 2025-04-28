@@ -6,8 +6,9 @@ struct Vector2D
     double y;
 
     Vector2D(const double x = 0.0, const double y = 0.0): x(x), y(y) {}
-    Vector2D operator+(const Vector2D v) const { return Vector2D(x + v.x, y + v.y); }
-    Vector2D operator-(const Vector2D v) const { return Vector2D(x - v.x, y - v.y); }
+    Vector2D operator+(const Vector2D &v) const { return Vector2D(x + v.x, y + v.y); }
+    Vector2D operator-(const Vector2D &v) const { return Vector2D(x - v.x, y - v.y); }
+    bool operator==(const Vector2D &v) const { return x == v.x && y == v.y; }
 
     friend std::ostream &operator<<(std::ostream &out, const Vector2D &v)
     {
