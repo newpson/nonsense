@@ -55,38 +55,34 @@ std::vector<Vector2D> read_polygon()
 
 int winding_number(const Vector2D &target, const std::vector<Vector2D> &frame)
 {
-    bool going_through = false;
+    // modified David G. Alciatore conception, split halfs and wholes
     int w = 0;
+    int hw = 0;
     for (int i = 0; i < frame.size() - 1; ++i) {
+        if (frame[i] == target)
+            return 1; // TODO (may be not TODO) modify final sum with this value somehow
+
         if (frame[i].x >= target.x) {
-            // if (frame[i].y < target.y && target.y <= frame[i+1].y) {
-            //     ++w;
-            // }
-            // else if (frame[i].y > target.y && target.y >= frame[i+1].y)
-            //     --w;
-            if (frame[i].y < target.y && target.y < frame[i+1].y) {
-                ++w;
-            } else if (frame[i].y > target.y && target.y > frame[i+1].y) {
-                --w;
-            } else if (frame[i].y == target.y && target.y < frame[i+1].y) {
-                if (!going_through)
+            if (frame[i].y < target.y) {
+                if (frame[i+1].y > target.y)
                     ++w;
-                going_through = false;
-            } else if (frame[i].y == target.y && target.y > frame[i+1].y) {
-                if (!going_through)
+                else if (frame[i+1].y == target.y)
+                    ++hw;
+            } else if (frame[i].y > target.y) {
+                if (frame[i+1].y < target.y)
                     --w;
-                going_through = false;
-            } else if (frame[i].y < target.y && target.y == frame[i+1].y) {
-                ++w;
-                going_through = true;
-            } else if (frame[i].y > target.y && target.y == frame[i+1].y) {
-                --w;
-                going_through = true;
+                else if (frame[i+1].y == target.y)
+                    --hw;
+            } else if (frame[i].y == target.y) {
+                if (frame[i+1].y > target.y)
+                    ++hw;
+                else if (frame[i+1].y < target.y)
+                    --hw;
             }
         }
-        std::cerr << "w = " << w << std::endl;
     }
-    return w;
+
+    return w + hw/2 + hw%2;
 }
 
 void plot_line(const Vector2D &begin, const Vector2D &end, const Vector2D &h)
@@ -177,6 +173,10 @@ int main(int argc, char **argv)
 
     path = expr_path_x.empty() ? read_polygon() : subdivide(expr_path_x, expr_path_y, library, false, path_ta, path_tb, path_tau);
     frame = expr_frame_x.empty() ? read_polygon() : subdivide(expr_frame_x, expr_frame_y, library, false, frame_ta, frame_tb, frame_tau);
+
+    // if (winding_number(path[0], frame) != 0)
+    //     std::cerr << "Inside!" << std::endl;
+    // return 0;
 
     std::cout << "unset object" << std::endl;
     for (int i = 0; i < path.size() - 1; ++i) {
