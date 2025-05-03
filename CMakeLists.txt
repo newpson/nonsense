@@ -7,6 +7,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_subdirectory(eval)
 
+add_executable(app-runge-kutta)
+target_sources(app-runge-kutta
+    PRIVATE
+    runge-kutta.cpp)
+target_link_libraries(app-runge-kutta
+    PUBLIC
+    evaluator)
+
 add_executable(app-tridiag)
 target_sources(app-tridiag
     PRIVATE
