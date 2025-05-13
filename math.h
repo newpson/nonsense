@@ -8,6 +8,12 @@ struct Vector2D
     Vector2D(const double x = 0.0, const double y = 0.0): x(x), y(y) {}
     Vector2D operator+(const Vector2D &v) const { return Vector2D(x + v.x, y + v.y); }
     Vector2D operator-(const Vector2D &v) const { return Vector2D(x - v.x, y - v.y); }
+
+    // fancy vector operators
+    Vector2D operator*(const Vector2D &v) const { return Vector2D(x * v.x, y * v.y); }
+    Vector2D operator/(const Vector2D &v) const { return Vector2D(x / v.x, y / v.y); }
+    Vector2D &operator=(const Vector2D &v) { x = v.x; y = v.y; return *this; }
+
     bool operator==(const Vector2D &v) const { return x == v.x && y == v.y; }
 
     friend std::ostream &operator<<(std::ostream &out, const Vector2D &v)
