@@ -2,11 +2,9 @@
 #include <iostream>
 #include <string>
 
-#include <format>
-#include <vector>
-
 #include "evaluator.h"
 #include "gnuplot-helpers.h"
+#include "math.h"
 #include "variable.h"
 
 double eval(
@@ -18,101 +16,135 @@ double eval(
     return Evaluator::eval(expr, lib);
 }
 
-void plot_point(const double x, const double y)
+struct Parabola
 {
-    std::cerr << "(" << x << ", " << y << ")" << std::endl;
-    std::cout << x << " " << y << std::endl;
-}
+    double a;
+    double b;
+    double c;
 
-void point_push(std::vector<double> &points, double x, double y)
-{
-    points.push_back(x);
-    points.push_back(y);
-}
+    static double calculate_a(const Vector2D &v1, const Vector2D &v2, const Vector2D &v3)
+    {
+        return (v3.y - (v3.x*(v2.y - v1.y) + v2.x*v1.y - v1.x*v2.y) / (v2.x - v1.x))
+               / (v3.x*(v3.x-v1.x-v2.x) + v1.x*v2.x);
+    }
 
-double get_top(const double x0, const double y0,
-               const double x1, const double y1,
-               const double x2, const double y2)
-{
-    const double a = (y2 - (x2*(y1 - y0) + x1*y0 - x0*y1)/(x1 - x0))/(x2*(x2-x0-x1) + x0*x1);
-    std::cerr << "a = " << a << std::endl;
-    const double b = (y1 - y0)/(x1 - x0) - a*(x0 + x1);
-    std::cerr << "b = " << b << std::endl;
-    return -b/a/2.0;
-}
+    static double calculate_b(const Vector2D &v1, const Vector2D &v2, const double a)
+    {
+        return (v2.y - v1.y) / (v2.x - v1.x) - a*(v1.x + v2.x);
+    }
 
-std::vector<double> find_min(
+    static double calculate_c(const Vector2D &v1, const Vector2D &v2, const double a)
+    {
+        return (v2.x*v1.y - v1.x*v2.y) / (v2.x - v1.x) + a * v1.x * v2.x;
+    }
+
+    static Vector2D get_top(const double a, const double b, const double c)
+    {
+        const double x = -b/2.0/a;
+        const double y = a*x*x + b*x + c;
+        return Vector2D(x, y);
+    }
+
+    static Vector2D get_top(const Vector2D &v1, const Vector2D &v2, const Vector2D &v3)
+    {
+        const double a = calculate_a(v1, v2, v3);
+        return get_top(a, calculate_b(v1, v2, a), calculate_c(v1, v2, a));
+    }
+
+    Vector2D get_top() const
+    {
+        return get_top(a, b, c);
+    }
+
+    Parabola(const double a = 0.0, const double b = 0.0, const double c = 0.0)
+        : a(a), b(b), c(c)
+    {}
+
+    Parabola(const Vector2D &v1, const Vector2D &v2, const Vector2D &v3)
+        : a(calculate_a(v1, v2, v3))
+        , b(calculate_b(v1, v2, a))
+        , c(calculate_c(v1, v2, a))
+    {}
+
+    friend std::ostream &operator<<(std::ostream &out, const Parabola &p)
+    {
+        out << p.a << "*x**2 + " << p.b << "*x + " << p.c;
+        return out;
+    }
+};
+
+Vector2D find_min(
     const std::string &expr,
     const Evaluator::library_t &lib,
-    double a, double b, double x_start, double h)
+    const double a, const double b, const double origin,
+    double h)
 {
-    std::vector<double> points;
-    double dir = 1.0;
+    if (b < a) {
+        std::cerr << "invalid bounds order" << std::endl;
+        return Vector2D();
+    }
+    if (origin > b || origin < a) {
+        std::cerr << "origin out of bounds" << std::endl;
+        return Vector2D();
+    }
 
-    double x0 = x_start;
-    double y0 = eval(expr, lib, x0);
-    point_push(points, x0, y0);
+    const Vector2D A(a, eval(expr, lib, a));
+    const Vector2D B(b, eval(expr, lib, b));
+    const Vector2D O(origin, eval(expr, lib, origin));
 
+    Vector2D cur(origin + h, eval(expr, lib, origin + h));
+    if (!is_inside(cur.x, a, b)) {
+        std::cerr << "early out of bounds" << std::endl;
+        const double px = Parabola::get_top(A, O, B).x;
+        const Vector2D ptop(px, eval(expr, lib, px));
+        return is_inside(ptop.x, a, b) ? min(A, O, B, ptop)
+                                    : min(A, O, B);
+    }
+
+    if (cur.y > O.y) {
+        std::cerr << "wrong direction" << std::endl;
+        h = -h;
+        cur = Vector2D(origin + h, eval(expr, lib, origin + h));
+        if (cur.y > O.y) {
+            std::cerr << "early convex" << std::endl;
+            const Vector2D positive_hO(origin + h, eval(expr, lib, origin + h));
+            const Vector2D negative_hO(origin - h, eval(expr, lib, origin - h));
+            const double px = Parabola::get_top(positive_hO, O, negative_hO).x;
+            const Vector2D ptop(px, eval(expr, lib, px));
+            return is_inside(ptop.x, a, b) ? min(positive_hO, O, negative_hO, ptop)
+                                        : min(positive_hO, O, negative_hO);
+        }
+    }
+
+    Vector2D prev = O;
+    Vector2D next;
     int i = 1;
-    double x1 = x_start + dir*i*h;
-    double y1 = eval(expr, lib, x1);
-    point_push(points, x1, y1);
-
-    if (y1 > y0) {
-        dir = -1.0;
-        x1 = x_start + dir*i*h;
-        y1 = eval(expr, lib, x1);
-        point_push(points, x1, y1);
-    }
-
-    if (y1 > y0) {
-        // std::cerr << "Already minimum" << std::endl;
-        return points;
-    }
-
-    double x2 = 0.0;
-    double y2 = 0.0;
-
-    i = 2;
     while (true) {
-        x2 = x_start + dir*h*std::pow(2, i-1);
+        next.x = origin + h*std::pow(2, i);
+        next.y = eval(expr, lib, next.x);
 
-        const bool isOutOfBounds = (x2 < a || x2 > b);
-        if (isOutOfBounds) {
-            std::cerr << "Out of bounds" << std::endl;
-            double z = get_top(x0, y0, x1, y1, x2, y2);
-            double v = eval(expr, lib, z);
-            x2 = std::abs(x2 - a) < std::abs(x2 - b) ? a : b;
-            y2 = eval(expr, lib, x2);
-            if (v < y2) {
-                std::cerr << "(but not really)" << std::endl;
-                point_push(points, z, v);
-            }
-            point_push(points, x2, y2);
-            break;
+        if (!is_inside(next.x, a, b)) {
+            std::cerr << "out of bounds" << std::endl;
+            const double px = Parabola::get_top(prev, cur, next).x;
+            const Vector2D ptop(px, eval(expr, lib, px));
+            return is_inside(ptop.x, a, b) ? min(A, B, cur, ptop)
+                                           : min(A, B, cur);
         }
 
-        y2 = eval(expr, lib, x2);
-        point_push(points, x2, y2);
-
-        double delta_n = y0 - y1;
-        double delta_p = y2 - y1;
-        const bool isConvex = (delta_n >= 0) && (delta_p >= 0) && (delta_n + delta_p > 0);
-        if (isConvex) {
-            std::cerr << "Convex" << std::endl;
-            // x2 = x1 + dir * h/2 * (delta_n - delta_p) / (delta_n + delta_p);
-            x2 = get_top(x0, y0, x1, y1, x2, y2);
-            y2 = eval(expr, lib, x2);
-            point_push(points, x2, y2);
-            break;
+        if (is_convex(prev, cur, next)) {
+            std::cerr << "convex" << std::endl;
+            Parabola parabola(prev, cur, next);
+            std::cerr << parabola << std::endl;
+            const double px = parabola.get_top().x;
+            return Vector2D(px, eval(expr, lib, px));
         }
 
-        x0 = x1; x1 = x2;
-        y0 = y1; y1 = y2;
+        prev = cur;
+        cur = next;
         ++i;
     }
 
-    return points;
+    return Vector2D();
 }
 
 int main(const int argc, const char **argv)
@@ -134,75 +166,16 @@ int main(const int argc, const char **argv)
     const double a = std::strtof(argv[2], nullptr);
     const double b = std::strtof(argv[3], nullptr);
 
-    // {
-    //     double x0 = -3.0;
-    //     double y0 = 0.0;
-    //     double x1 = -1.5;
-    //     double y1 = -0.75;
-    //     double x2 = 0.0;
-    //     double y2 = 3.0;
-
-    //     double delta_n = y0 - y1;
-    //     double delta_p = y2 - y1;
-    //     const bool isConvex = (delta_n >= 0) && (delta_p >= 0) && (delta_n + delta_p > 0);
-    //     if (isConvex) {
-    //         std::cerr << "Convex" << std::endl;
-    //         std::cerr << get_top(x0, y0, x1, y1, x2, y2) << std::endl;
-    //     }
-    //     else
-    //     {
-    //         std::cerr << "Not convex" << std::endl;
-    //     }
-    // }
-    // return 0;
-
-    /* == Plotting pipeline ==
-     *
-     * plot f(x) ls 2, '-' ls 1, p(x) ls 3
-     *
-     * where f(x) - function
-     */
-
+    // TODO make iterative calculation of minimum until eps
     const double eps = (argc > 1 + 3) ? std::strtof(argv[4], nullptr) : 1e-15;
 
-    std::vector<double> points;
-    double h = std::abs(b - a) / 1000;
+    double h = std::abs(b - a) / 1.5;
 
-    points = find_min(
+    Vector2D minimum = find_min(
         expression, library,
         a, b, (a + b)/2, h);
 
-    const double &ymin = points[points.size() - 1];
-    const double &xmin = points[points.size() - 2];
-
-    std::cout << "$points << e" << std::endl;
-    for (int i = 0; i < points.size() - 2; i += 2)
-        std::cout << points[i] << " " << points[i+1] << std::endl;
-    std::cout << "e" << std::endl;
-
-    std::cout << "$min << e" << std::endl;
-    std::cout << xmin << " " << ymin << std::endl;
-    std::cout << "e" << std::endl;
-
-    const double &y3 = points[points.size() - 3];
-    const double &x3 = points[points.size() - 4];
-    const double &y2 = points[points.size() - 5];
-    const double &x2 = points[points.size() - 6];
-    const double &y1 = points[points.size() - 7];
-    const double &x1 = points[points.size() - 8];
-
-    std::cout << "plot " << gnuplot_convert(expression) << " ls 2";
-    std::cout << std::format(", {} * (x - {})*(x - {}) / ({} - {})/({} - {})",
-                             y1, x2, x3, x1, x2, x1, x3);
-    std::cout << std::format("+ {} * (x - {})*(x - {}) / ({} - {})/({} - {})",
-                             y2, x1, x3, x2, x1, x2, x3);
-    std::cout << std::format("+ {} * (x - {})*(x - {}) / ({} - {})/({} - {})",
-                             y3, x1, x2, x3, x1, x3, x2);
-    std::cout << "ls 3 title \"parabola\"";
-    std::cout << ", $points with linespoints ls 3 title \"points\", $min with points ls 1 title \"min\"" << std::endl;
-
-    int trash;
-    std::cin >> trash;
+    std::cerr << minimum << std::endl;
 
     return 0;
 }
