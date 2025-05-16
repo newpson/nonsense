@@ -87,47 +87,79 @@ int winding_number(const Vector2D &target, const std::vector<Vector2D> &frame)
 
 void plot_line(const Vector2D &begin, const Vector2D &end, const Vector2D &h)
 {
-    const Vector2D linevector = end - begin;
-    const Vector2D direction(std::copysign(1.0, linevector.x),
-                             std::copysign(1.0, linevector.y));
-    const double invertor = copysign(1.0, linevector.x * linevector.y); // инверсия осей в чётных квадрантах
+    enum Cardinal {
+        NORTH_EAST, // 0b00
+        NORTH_WEST, // 0b01
+        SOUTH_EAST, // 0b10
+        SOUTH_WEST, // 0b11
+        NUM_CARDINALS,
+    };
 
-    const Vector2D cell_begin(direction.x > 0 ? std::floor(begin.x/h.x)*h.x : std::ceil(begin.x/h.x)*h.x,
-                              direction.y > 0 ? std::floor(begin.y/h.y)*h.y : std::ceil(begin.y/h.y)*h.y);
-    const Vector2D cell_end(direction.x > 0 ? std::floor(end.x/h.x)*h.x : std::ceil(end.x/h.x)*h.x,
-                            direction.y > 0 ? std::floor(end.y/h.y)*h.y : std::ceil(end.y/h.y)*h.y);
+    // TODO integer Vector2D type (may be templates)
 
+    // cell pivot shift
+    const Vector2D shift[NUM_CARDINALS] = {
+        [NORTH_EAST] = {1.0, 1.0},
+        [NORTH_WEST] = {0.0, 1.0},
+        [SOUTH_EAST] = {1.0, 0.0},
+        [SOUTH_WEST] = {0.0, 0.0},
+    };
+
+    // move vector when det > 0
+    const Vector2D move_p[NUM_CARDINALS] = {
+        [NORTH_EAST] = { 0.0,  1.0},
+        [NORTH_WEST] = {-1.0,  0.0},
+        [SOUTH_EAST] = { 1.0,  0.0},
+        [SOUTH_WEST] = { 0.0, -1.0},
+    };
+
+    // move vector when det < 0
+    const Vector2D move_n[NUM_CARDINALS] = {
+        [NORTH_EAST] = { 1.0,  0.0},
+        [NORTH_WEST] = { 0.0,  1.0},
+        [SOUTH_EAST] = { 0.0, -1.0},
+        [SOUTH_WEST] = {-1.0,  0.0},
+    };
+
+    const Vector2D guide = end - begin;
+    // TODO maybe more effective way to set direction using bit arithmetics?
+    const Cardinal direction = guide.y > 0 ? guide.x > 0 ? NORTH_EAST : NORTH_WEST
+                                           : guide.x > 0 ? SOUTH_EAST : SOUTH_WEST;
+
+    const Vector2D end_floored = Vector2D(std::floor(end.x/h.x),
+                                          std::floor(end.y/h.y));
+    Vector2D cur(std::floor(begin.x/h.x),
+                 std::floor(begin.y/h.y));
+    std::cerr << cur*h << std::endl;
+    // std::cout << "set object rect from "
+    //           << cur.x*h.x << "," << cur.y*h.y
+    //           << " to "
+    //           << (cur.x + 1.0)*h.x << "," << (cur.y + 1.0)*h.y
+    //           << std::endl;
     int i = 0;
-    Vector2D cell = cell_begin;
-    while ((std::abs(cell.x - cell_end.x) > h.x/100.0
-            || std::abs(cell.y - cell_end.y) > h.y/100.0) && i < 1000) {
-        std::cout << "set object rect from "
-                  << cell.x << "," << cell.y
-                  << " to "
-                  << cell.x + direction.x*h.x << "," << cell.y + direction.y*h.y
-                  << std::endl;
-        std::cerr << "Going through " << cell << std::endl;
-        cell.x += h.x*direction.x;
-        cell.y += h.y*direction.y;
-        const double D = invertor*((cell.y - begin.y)*linevector.x - (cell.x - begin.x)*linevector.y);
-        if (D > 0)
-            cell.y -= h.y*direction.y;
-        else if (D < 0)
-            cell.x -= h.x*direction.x;
+    Vector2D aux = h * (cur + shift[direction]) - begin;
+    while (std::abs(aux.x) <= std::abs(guide.x) && std::abs(aux.y) <= std::abs(guide.y) && i < 100) { // FIXME make integer comparison
+        aux = h * (cur + shift[direction]) - begin;
+        const double det = aux.x * guide.y - guide.x * aux.y;
+        cur = cur + (det > 0 ? move_p[direction]
+                   : det < 0 ? move_n[direction]
+                             : move_p[direction] + move_n[direction]);
+        std::cerr << cur*h << std::endl;
+        // std::cout << "set object rect from "
+        //           << cur.x*h.x << "," << cur.y*h.y
+        //           << " to "
+        //           << (cur.x + 1.0)*h.x << "," << (cur.y + 1.0)*h.y
+        //           << std::endl;
         ++i;
     }
-    if (i >= 1000)
-        std::cerr << "Sampling overflow at " << begin << " -> " << end << std::endl;
-
-    std::cout << "set object rect from "
-              << cell.x << "," << cell.y
-              << " to "
-              << cell.x + direction.x*h.x << "," << cell.y + direction.y*h.y
-              << std::endl;
 }
 
 int main(int argc, char **argv)
 {
+    // TODO
+    plot_line({0.1, 1.0}, {0.2, 0.9}, {0.1, 0.1});
+    return 0;
+
     std::shared_ptr<Variable> t(new Variable());
     Evaluator::library_t library = {
         {"t", t},
@@ -173,10 +205,6 @@ int main(int argc, char **argv)
 
     path = expr_path_x.empty() ? read_polygon() : subdivide(expr_path_x, expr_path_y, library, false, path_ta, path_tb, path_tau);
     frame = expr_frame_x.empty() ? read_polygon() : subdivide(expr_frame_x, expr_frame_y, library, false, frame_ta, frame_tb, frame_tau);
-
-    // if (winding_number(path[0], frame) != 0)
-    //     std::cerr << "Inside!" << std::endl;
-    // return 0;
 
     std::cout << "unset object" << std::endl;
     for (int i = 0; i < path.size() - 1; ++i) {
