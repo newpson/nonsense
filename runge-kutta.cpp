@@ -29,7 +29,7 @@ double estimate(const std::string &expression,
 
 double inline error(const double y, const double y_half)
 {
-    return std::abs(y - y_half)/15.0; // (2^p - 1); p = 4
+    return std::abs(y - y_half)/15.0; // (2^s - 1); s = 4
 }
 
 void integrate(const std::string &expression,
@@ -65,32 +65,40 @@ void integrate(const std::string &expression,
     double remain_s = b - cur.x;
     double remain_u = std::abs(remain_s);
     bool big_remain = true;
+    double err = 0.0;
     while (dir * remain_s > 0) {
         if (remain_u < 2.0*std::abs(h) && big_remain) {
-            std::cerr << "warning: remain is low" << std::endl;
+            std::cerr << "warning: remain is low: " << remain_u << std::endl;
             if (remain_u < hcrit) {
                 std::cerr << "error: failed to reach the end of the range: " << remain_u << std::endl;
                 break;
             }
             h = remain_s;
-            if (remain_u >= 2.0*hcrit)
+            if (remain_u >= 2.0*hcrit && err > eps)
                 h /= 2.0;
             big_remain = false;
         }
 
         double y = estimate(expression, library, cur, h);
         double y_half = estimate(expression, library, cur, h/2.0);
-        while (error(y, y_half) < eps/16.0 && std::abs(h) < remain_u && big_remain) {
+        double y_dhalf = estimate(expression, library, {cur.x + h/2.0, y_half}, h/2.0);
+        err = error(y, y_dhalf);
+
+        while (err < eps/16.0 && 2.0*std::abs(h) < remain_u && big_remain) {
             h *= 2.0;
             y_half = y;
             y = estimate(expression, library, cur, h);
-            std::cerr << "info: *2: h = " << h << ", err = " << error(y, y_half) << std::endl;
+            y_dhalf = estimate(expression, library, {cur.x + h/2.0, y_half}, h/2.0);
+            err = error(y, y_dhalf);
+            std::cerr << "info: *2: h = " << h << ", err = " << err << std::endl;
         }
-        while (error(y, y_half) > eps && std::abs(h) >= 2.0*hcrit && big_remain) {
+        while (err > eps && std::abs(h) >= 2.0*hcrit && big_remain) {
             h /= 2.0;
             y = y_half;
             y_half = estimate(expression, library, cur, h/2.0);
-            std::cerr << "info: /2: h = " << h << ", err = " << error(y, y_half) << std::endl;
+            y_dhalf = estimate(expression, library, {cur.x + h/2.0, y_half}, h/2.0);
+            err = error(y, y_dhalf);
+            std::cerr << "info: /2: h = " << h << ", err = " << err << std::endl;
         }
 
         cur.y = y;
@@ -100,7 +108,6 @@ void integrate(const std::string &expression,
 
         std::cout << cur << std::endl;
 
-        const double err = error(y, y_half);
         if (err > eps)
             ++num_eps;
         std::cerr << "info: fin: h = " << h << ", err = " << err << std::endl;
