@@ -2,6 +2,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <cmath>
 
 #include "evaluator.h"
 #include "gnuplot-helpers.h"
@@ -10,9 +11,10 @@
 
 double eval(const std::string &expression,
             const Evaluator::library_t &library,
-            const double x)
+            const double x, const double y)
 {
     dynamic_cast<Variable &>(*library.at("x")).value = x;
+    dynamic_cast<Variable &>(*library.at("y")).value = y;
     return Evaluator::eval(expression, library);
 }
 
@@ -20,10 +22,10 @@ double estimate(const std::string &expression,
                 const Evaluator::library_t &library,
                 const Vector2D &v, const double h)
 {
-    const double k1 = eval(expression, library, v.x);
-    const double k2 = eval(expression, library, v.x + h/2.0);
-    const double k3 = k2;
-    const double k4 = eval(expression, library, v.x + h);
+    const double k1 = eval(expression, library, v.x, v.y);
+    const double k2 = eval(expression, library, v.x + h/2.0, v.y + h*k1/2.0);
+    const double k3 = eval(expression, library, v.x + h/2.0, v.y + h*k2/2.0);
+    const double k4 = eval(expression, library, v.x + h, v.y + h*k3);
     return v.y + h/6.0 * (k1 + 2.0*k2 + 2.0*k3 + k4);
 }
 
@@ -101,23 +103,21 @@ void integrate(const std::string &expression,
             std::cerr << "info: /2: h = " << h << ", err = " << err << std::endl;
         }
 
-        cur.y = y;
-        cur.x += h;
+        cur = {cur.x + h, y};
         if (h == hcrit)
             ++num_hcrit;
-
-        std::cout << cur << std::endl;
-
         if (err > eps)
             ++num_eps;
+
+        std::cout << cur << std::endl;
         std::cerr << "info: fin: h = " << h << ", err = " << err << std::endl;
 
+        ++i;
         remain_s = b - cur.x;
         remain_u = std::abs(remain_s);
-
-        ++i;
-        std::cerr << "info: ---" << std::endl;
+        std::cerr << "info:" << std::endl;
     }
+
     std::cerr << "info: stats: i = " << i
               << ", num_eps = " << num_eps
               << ", num_hcrit = " << num_hcrit
@@ -126,12 +126,19 @@ void integrate(const std::string &expression,
 
 int main(int argc, char **argv)
 {
+    /* Примеры
+     * y' = 1 или 2*x или 3*x^2 или 4*x^3, a = 0, b =1, ya = 0; погрешность нулевая
+     * y' = 2*y - sin(x), a = 0, b = 1, ya = 0; y = (2*sin(x) + cos(x) - e^(2*x))/5; y^(V) = -(2*sin(x))/5-(cos(x))/5-(64*e^(2*x))/5
+     */
     if (argc < 1 + 4) {
         std::cerr << "<expression> <A> <B> <C> [eps [hmin]]" << std::endl;
         return 0;
     }
 
-    Evaluator::library_t library = {{"x", std::shared_ptr<Evaluable>(new Variable())}};
+    Evaluator::library_t library = {
+        {"x", std::shared_ptr<Evaluable>(new Variable())},
+        {"y", std::shared_ptr<Evaluable>(new Variable())}
+    };
     library.insert(Evaluator::default_library.begin(),
                    Evaluator::default_library.end());
 
