@@ -6,12 +6,30 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_subdirectory(eval)
+add_subdirectory(eigen)
+
+add_executable(app-newton2d)
+target_sources(app-newton2d
+    PRIVATE
+    newton2d.cpp)
+target_link_libraries(app-newton2d
+    PUBLIC
+    evaluator
+    eigen)
 
 add_executable(app-newton1d)
 target_sources(app-newton1d
     PRIVATE
     newton1d.cpp)
 target_link_libraries(app-newton1d
+    PUBLIC
+    evaluator)
+
+add_executable(app-shooting)
+target_sources(app-shooting
+    PRIVATE
+    shooting.cpp)
+target_link_libraries(app-shooting
     PUBLIC
     evaluator)
 
