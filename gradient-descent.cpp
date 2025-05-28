@@ -35,15 +35,16 @@ double dy(const Eigen::Matrix3d &z_grid, const double h)
 void find_min(
     const std::string &expr,
     const Evaluator::library_t &lib,
-    const double a, const double b,
     const Eigen::Vector2d x0, const double eps = 1e-06)
 {
     const double h = 0.001; // TODO dynamic step depending on epsilon (?)
 
     Eigen::Vector2d x = x0;
     double err = 0.0;
+    double rate = 1.0;
     int i = 0;
     do {
+begin:
         Eigen::Matrix3d z_grid;
         /* -h,+h  +0,+h  +h,+h
          * -h,+0  +0,+0  +h,+0
@@ -56,8 +57,11 @@ void find_min(
         const Eigen::Vector2d grad(dx(z_grid, h), dy(z_grid, h));
         const Eigen::Vector2d dir = -grad;
 
-        const double rate = 0.5;
         const Eigen::Vector2d x_next = x + rate*dir;
+        if (eval(expr, lib, x_next) > eval(expr, lib, x)) {
+            rate /= 2.0;
+            goto begin;
+        }
         err = (x - x_next).norm();
         x = x_next;
         std::cout << x.x() << " " << x.y() << " " << eval(expr, lib, x) << std::endl;
@@ -70,8 +74,8 @@ void find_min(
 
 int main(const int argc, const char **argv)
 {
-    if (argc < 1 + 5) {
-        std::cerr << "<expression> <a> <b> <x0> <y0> [eps]" << std::endl;
+    if (argc < 1 + 3) {
+        std::cerr << "<expression> <x0> <y0> [eps]" << std::endl;
         return 0;
     }
 
@@ -82,11 +86,9 @@ int main(const int argc, const char **argv)
                    Evaluator::default_library.end());
 
     const std::string expression(argv[1]);
-    const double a = std::strtod(argv[2], nullptr);
-    const double b = std::strtod(argv[3], nullptr);
-    const double x0 = std::strtod(argv[4], nullptr);
-    const double y0 = std::strtod(argv[5], nullptr);
-    find_min(expression, library, a, b, {x0, y0});
+    const double x0 = std::strtod(argv[2], nullptr);
+    const double y0 = std::strtod(argv[3], nullptr);
+    find_min(expression, library, {x0, y0});
 
     // Vector2D minimum;
     // if (argc > 1 + 2) {

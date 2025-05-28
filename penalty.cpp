@@ -66,10 +66,12 @@ void find_min(
     Eigen::Vector2d x = x0;
     double err = 0.0;
     double constr_rate = 1.0;
-    int i = 0;
+    double rate = 1.0;
     int j = 0;
     do {
+        int i = 0;
         do {
+begin:
             Eigen::Matrix3d z_grid;
             /* -h,+h  +0,+h  +h,+h
              * -h,+0  +0,+0  +h,+0
@@ -82,23 +84,21 @@ void find_min(
             const Eigen::Vector2d grad(dx(z_grid, h), dy(z_grid, h));
             const Eigen::Vector2d dir = -grad;
 
-            const double rate = 0.01;
             const Eigen::Vector2d x_next = x + rate*dir;
+            if (augmented(expr, constr, lib, x_next, constr_rate) > augmented(expr, constr, lib, x, constr_rate)) {
+                rate /= 2.0;
+                goto begin;
+            }
             err = (x - x_next).norm();
             x = x_next;
             std::cout << x.x() << " " << x.y() << " " << eval(expr, lib, x) << std::endl;
             ++i;
         } while (err > eps && i < 100);
 
-        err = penalty(constr, lib, x, constr_rate);
-        std::cerr << "penalty: " << err << std::endl;
+        err = std::abs(penalty(constr, lib, x, constr_rate));
         constr_rate *= 2.0;
         ++j;
     } while (err > eps && j < 100);
-
-    std::cerr << "info: i = " << i << std::endl;
-
-    // std::cerr << x << " " << y << " " << eval(expr, lib, x) << std::endl;
 }
 
 int main(const int argc, const char **argv)
