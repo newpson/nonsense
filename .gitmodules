@@ -1,3 +1,6 @@
 [submodule "eval"]
 	path = eval
 	url = https://github.com/newpson/eval
+[submodule "eigen"]
+	path = eigen
+	url = https://gitlab.com/libeigen/eigen.git
