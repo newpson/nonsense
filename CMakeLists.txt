@@ -8,6 +8,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_subdirectory(eval)
 add_subdirectory(eigen)
 
+add_executable(app-penalty)
+target_sources(app-penalty
+    PRIVATE
+    penalty.cpp)
+target_link_libraries(app-penalty
+    PUBLIC
+    evaluator
+    eigen)
+
 add_executable(app-gradient-descent)
 target_sources(app-gradient-descent
     PRIVATE
