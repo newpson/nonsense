@@ -8,6 +8,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_subdirectory(eval)
 add_subdirectory(eigen)
 
+add_executable(app-gradient-descent)
+target_sources(app-gradient-descent
+    PRIVATE
+    gradient-descent.cpp)
+target_link_libraries(app-gradient-descent
+    PUBLIC
+    evaluator
+    eigen)
+
 add_executable(app-newton2d)
 target_sources(app-newton2d
     PRIVATE
