@@ -8,6 +8,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_subdirectory(eval)
 add_subdirectory(eigen)
 
+add_executable(app-shooting)
+target_sources(app-shooting
+    PRIVATE
+    shooting.cpp)
+target_link_libraries(app-shooting
+    PUBLIC
+    evaluator
+    eigen)
+
 add_executable(app-penalty)
 target_sources(app-penalty
     PRIVATE
@@ -43,13 +52,13 @@ target_link_libraries(app-newton1d
     PUBLIC
     evaluator)
 
-add_executable(app-shooting)
-target_sources(app-shooting
-    PRIVATE
-    shooting.cpp)
-target_link_libraries(app-shooting
-    PUBLIC
-    evaluator)
+# add_executable(app-shooting)
+# target_sources(app-shooting
+#     PRIVATE
+#     shooting.cpp)
+# target_link_libraries(app-shooting
+#     PUBLIC
+#     evaluator)
 
 add_executable(app-runge-kutta)
 target_sources(app-runge-kutta
