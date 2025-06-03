@@ -1,4 +1,19 @@
 #include <ostream>
+#include <cmath>
+
+double floor_eps(const double value, const double eps = 1e-12)
+{
+    const double floored = std::floor(value);
+    const double ceiled = std::ceil(value);
+    if (std::abs(ceiled - value) < eps)
+        return ceiled;
+    return floored;
+}
+
+bool are_equal(const double a, const double b, const double eps = 1e-12)
+{
+    return std::abs(a - b) < eps;
+}
 
 struct Vector2D
 {
@@ -14,8 +29,12 @@ struct Vector2D
     Vector2D operator*(const Vector2D &v) const { return Vector2D(x * v.x, y * v.y); }
     Vector2D operator/(const Vector2D &v) const { return Vector2D(x / v.x, y / v.y); }
     Vector2D &operator=(const Vector2D &v) { x = v.x; y = v.y; return *this; }
+    Vector2D floor() const { return Vector2D(floor_eps(x), floor_eps(y)); }
+    Vector2D floor(const Vector2D &grid) const { return Vector2D(floor_eps(x/grid.x), floor_eps(y/grid.y)); }
+    double length() const { return std::sqrt(x*x + y*y); }
 
-    bool operator==(const Vector2D &v) const { return x == v.x && y == v.y; }
+    bool operator==(const Vector2D &v) const { return are_equal(x, v.x) && are_equal(y, v.y); }
+    bool operator!=(const Vector2D &v) const { return !(*this == v); }
 
     friend std::ostream &operator<<(std::ostream &out, const Vector2D &v)
     {
