@@ -10,6 +10,8 @@
 #include "math.h"
 #include "variable.h"
 
+#include "Eigen/Dense"
+
 double eval(
     const std::string &expr,
     const Evaluator::library_t &lib,
@@ -55,7 +57,8 @@ std::vector<Vector2D> read_polygon()
 
 int winding_number(const Vector2D &target, const std::vector<Vector2D> &frame)
 {
-    // modified David G. Alciatore conception, split halfs and wholes
+    // modification of David G. Alciatore algorithm
+    // (number of winds is split into halves and wholes)
     int w = 0;
     int hw = 0;
     for (int i = 0; i < frame.size() - 1; ++i) {
@@ -85,81 +88,71 @@ int winding_number(const Vector2D &target, const std::vector<Vector2D> &frame)
     return w + hw/2 + hw%2;
 }
 
-void plot_line(const Vector2D &begin, const Vector2D &end, const Vector2D &h)
+void plot_square(const Vector2D &p, const Vector2D &h)
 {
-    enum Cardinal {
-        NORTH_EAST, // 0b00
-        NORTH_WEST, // 0b01
-        SOUTH_EAST, // 0b10
-        SOUTH_WEST, // 0b11
-        NUM_CARDINALS,
-    };
+    std::cout << "set object rect from "
+              << p.x*h.x << "," << p.y*h.y
+              << " to "
+              << (p.x + 1.0)*h.x << "," << (p.y + 1.0)*h.y
+              << std::endl;
+    // std::cerr << p.x*h.x << " " << p.y*h.y << std::endl;
+}
 
-    // TODO integer Vector2D type (may be templates)
+void plot_point(const Vector2D &p, const Vector2D &h)
+{
+    const Vector2D p_grid = p / h;
+    const Vector2D p_cell = p_grid.floor();
+    std::cerr << "origin: " << p << std::endl;
+    std::cerr << "guarantee: " << p_cell * h << std::endl;
+    plot_square(p_cell, h);
+    if (are_equal(p_grid.x, p_cell.x))
+        plot_square(Vector2D(p_cell.x - 1.0, p_cell.y), h);
+    if (are_equal(p_grid.y, p_cell.y))
+        plot_square(Vector2D(p_cell.x, p_cell.y - 1.0), h);
+    if (p_grid == p_cell)
+        plot_square(p_cell - Vector2D(1.0, 1.0), h);
+}
 
-    // cell pivot shift
-    const Vector2D shift[NUM_CARDINALS] = {
-        [NORTH_EAST] = {1.0, 1.0},
-        [NORTH_WEST] = {0.0, 1.0},
-        [SOUTH_EAST] = {1.0, 0.0},
-        [SOUTH_WEST] = {0.0, 0.0},
-    };
+void plot_line(const Vector2D &A, const Vector2D &B, const Vector2D &h)
+{
+    const Vector2D *begin = &A;
+    const Vector2D *end = &B;
+    if (B.x < A.x || (are_equal(A.x, B.x) && B.y < A.y)) {
+        begin = &B;
+        end = &A;
+    }
 
-    // move vector when det > 0
-    const Vector2D move_p[NUM_CARDINALS] = {
-        [NORTH_EAST] = { 0.0,  1.0},
-        [NORTH_WEST] = {-1.0,  0.0},
-        [SOUTH_EAST] = { 1.0,  0.0},
-        [SOUTH_WEST] = { 0.0, -1.0},
-    };
+    plot_point(*begin, h);
+    plot_point(*end, h);
 
-    // move vector when det < 0
-    const Vector2D move_n[NUM_CARDINALS] = {
-        [NORTH_EAST] = { 1.0,  0.0},
-        [NORTH_WEST] = { 0.0,  1.0},
-        [SOUTH_EAST] = { 0.0, -1.0},
-        [SOUTH_WEST] = {-1.0,  0.0},
-    };
+    // implementation of John Amanatides & Andrew Woo ray casting algorithm
+    // terms: u + v*t  <=>  origin + guide * t
+    Vector2D origin = *begin;
+    const Vector2D guide = *end - *begin;
+    const int dy = guide.y < 0 ? -1 : 1;
 
-    const Vector2D guide = end - begin;
-    // TODO maybe more effective way to set direction using bit arithmetics?
-    const Cardinal direction = guide.y > 0 ? guide.x > 0 ? NORTH_EAST : NORTH_WEST
-                                           : guide.x > 0 ? SOUTH_EAST : SOUTH_WEST;
+    const Vector2D end_cell = end->floor(h);
 
-    const Vector2D end_floored = Vector2D(std::floor(end.x/h.x),
-                                          std::floor(end.y/h.y));
-    Vector2D cur(std::floor(begin.x/h.x),
-                 std::floor(begin.y/h.y));
-    std::cerr << cur*h << std::endl;
-    // std::cout << "set object rect from "
-    //           << cur.x*h.x << "," << cur.y*h.y
-    //           << " to "
-    //           << (cur.x + 1.0)*h.x << "," << (cur.y + 1.0)*h.y
-    //           << std::endl;
     int i = 0;
-    Vector2D aux = h * (cur + shift[direction]) - begin;
-    while (std::abs(aux.x) <= std::abs(guide.x) && std::abs(aux.y) <= std::abs(guide.y) && i < 100) { // FIXME make integer comparison
-        aux = h * (cur + shift[direction]) - begin;
-        const double det = aux.x * guide.y - guide.x * aux.y;
-        cur = cur + (det > 0 ? move_p[direction]
-                   : det < 0 ? move_n[direction]
-                             : move_p[direction] + move_n[direction]);
-        std::cerr << cur*h << std::endl;
-        // std::cout << "set object rect from "
-        //           << cur.x*h.x << "," << cur.y*h.y
-        //           << " to "
-        //           << (cur.x + 1.0)*h.x << "," << (cur.y + 1.0)*h.y
-        //           << std::endl;
+    while (origin.floor(h) != end_cell && i < 50) {
+        const Vector2D origin_aligned = origin.floor(h) * h;
+        const Vector2D grid_node = origin_aligned + Vector2D(h.x, dy * h.y);
+        const Vector2D distance_s = (grid_node - origin) / guide;
+        const Vector2D distance_u(std::abs(distance_s.x), std::abs(distance_s.y));
+        if (distance_u.x < distance_u.y)
+            origin = {grid_node.x, origin.y + distance_u.x * guide.y};
+        else if (distance_u.x > distance_u.y)
+            origin = {origin.x + distance_u.y * guide.x, grid_node.y};
+        else
+            origin = grid_node;
+        plot_point(origin, h);
         ++i;
     }
+
 }
 
 int main(int argc, char **argv)
 {
-    // TODO
-    plot_line({0.1, 1.0}, {0.2, 0.9}, {0.1, 0.1});
-    return 0;
-
     std::shared_ptr<Variable> t(new Variable());
     Evaluator::library_t library = {
         {"t", t},
@@ -167,7 +160,7 @@ int main(int argc, char **argv)
     library.insert(Evaluator::default_library.begin(),
                    Evaluator::default_library.end());
 
-    Vector2D step_space(0.1, 0.1);
+    Vector2D step_space(0.023, 0.067);
     std::vector<Vector2D> path;
     std::vector<Vector2D> frame;
 
