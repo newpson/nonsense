@@ -8,6 +8,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_subdirectory(eval)
 add_subdirectory(eigen)
 
+add_executable(app-pardereq)
+target_sources(app-pardereq
+    PRIVATE
+    pardereq.cpp)
+target_link_libraries(app-pardereq
+    PUBLIC
+    evaluator
+    eigen)
+
 add_executable(app-shooting)
 target_sources(app-shooting
     PRIVATE
