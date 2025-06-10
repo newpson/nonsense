@@ -10,6 +10,11 @@ add_subdirectory(eval)
 add_subdirectory(eigen)
 
 if(CMAKE_CUDA_COMPILER)
+    add_executable(app-cuda-bitonic)
+    target_sources(app-cuda-bitonic
+        PRIVATE
+        bitonic.cu)
+
     add_executable(app-cuda-csr)
     target_sources(app-cuda-csr
         PRIVATE
