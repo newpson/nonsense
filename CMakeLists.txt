@@ -1,12 +1,20 @@
 cmake_minimum_required(VERSION 3.14)
-project(nonsense CXX)
+project(nonsense CXX CUDA)
 add_compile_options(-g)
 
+enable_language(CUDA)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_subdirectory(eval)
 add_subdirectory(eigen)
+
+if(CMAKE_CUDA_COMPILER)
+    add_executable(app-cuda-dotproduct)
+    target_sources(app-cuda-dotproduct
+        PRIVATE
+        dot-product.cu)
+endif()
 
 add_executable(app-pardereq)
 target_sources(app-pardereq
