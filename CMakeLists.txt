@@ -1,8 +1,10 @@
 cmake_minimum_required(VERSION 3.14)
-project(nonsense CXX CUDA)
+project(nonsense)
 add_compile_options(-g)
 
-enable_language(CUDA)
+# enable_language(CUDA OPTIONAL)
+include(CheckLanguage)
+check_language(CUDA)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -10,6 +12,8 @@ add_subdirectory(eval)
 add_subdirectory(eigen)
 
 if(CMAKE_CUDA_COMPILER)
+    enable_language(CUDA)
+
     add_executable(app-cuda-bitonic)
     target_sources(app-cuda-bitonic
         PRIVATE
