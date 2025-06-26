@@ -1,18 +1,18 @@
 #include <ostream>
 #include <cmath>
 
+bool are_equal(const double a, const double b, const double eps = 1e-12)
+{
+    return std::abs(a - b) <= eps;
+}
+
 double floor_eps(const double value, const double eps = 1e-12)
 {
     const double floored = std::floor(value);
     const double ceiled = std::ceil(value);
-    if (std::abs(ceiled - value) < eps)
+    if (are_equal(ceiled, value, eps))
         return ceiled;
     return floored;
-}
-
-bool are_equal(const double a, const double b, const double eps = 1e-12)
-{
-    return std::abs(a - b) < eps;
 }
 
 struct Vector2D
