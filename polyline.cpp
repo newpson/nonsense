@@ -4,6 +4,7 @@
 #include <string>
 #include <sstream>
 #include <vector>
+#include <set>
 
 #include "evaluator.h"
 #include "gnuplot-helpers.h"
@@ -11,6 +12,18 @@
 #include "variable.h"
 
 #include "Eigen/Dense"
+using namespace Eigen;
+
+class CompareVector2i
+{
+public:
+    bool operator()(const Vector2i &a, const Vector2i &b) const
+    {
+        return a.x() < b.x() || a.y() < b.y();
+    }
+};
+
+using vecset = std::set<Vector2i, CompareVector2i>;
 
 double eval(
     const std::string &expr,
@@ -21,24 +34,24 @@ double eval(
     return Evaluator::eval(expr, lib);
 }
 
-std::vector<Vector2D> subdivide(const std::string &expr_x,
+std::vector<Vector2d> subdivide(const std::string &expr_x,
                                 const std::string &expr_y,
                                 const Evaluator::library_t &lib,
                                 const bool close,
                                 const double ta = 0.0, const double tb = 1.0, const double h = 0.01)
 {
-    std::vector<Vector2D> points;
+    std::vector<Vector2d> points;
     for (double t = ta; t <= tb; t += h) {
-        points.push_back(Vector2D(eval(expr_x, lib, t), eval(expr_y, lib, t)));
+        points.push_back(Vector2d(eval(expr_x, lib, t), eval(expr_y, lib, t)));
     }
     if (close)
         points.push_back(points.front());
     return points;
 }
 
-std::vector<Vector2D> read_polygon()
+std::vector<Vector2d> read_polygon()
 {
-    std::vector<Vector2D> points;
+    std::vector<Vector2d> points;
     std::string line;
     double x = 0.0;
     double y = 0.0;
@@ -49,13 +62,13 @@ std::vector<Vector2D> read_polygon()
         } else {
             std::stringstream stream(line);
             stream >> x >> y;
-            points.push_back(Vector2D(x, y));
+            points.push_back(Vector2d(x, y));
         }
     }
     return points;
 }
 
-int winding_number(const Vector2D &target, const std::vector<Vector2D> &frame)
+int winding_number(const Vector2d &target, const std::vector<Vector2d> &frame)
 {
     // modification of David G. Alciatore algorithm
     // (number of winds is split into halves and wholes)
@@ -65,21 +78,21 @@ int winding_number(const Vector2D &target, const std::vector<Vector2D> &frame)
         if (frame[i] == target)
             return 1; // TODO (may be not TODO) modify final sum with this value somehow
 
-        if (frame[i].x >= target.x) {
-            if (frame[i].y < target.y) {
-                if (frame[i+1].y > target.y)
+        if (frame[i].x()>= target.x()) {
+            if (frame[i].y()< target.y()) {
+                if (frame[i+1].y()> target.y())
                     ++w;
-                else if (frame[i+1].y == target.y)
+                else if (frame[i+1].y()== target.y())
                     ++hw;
-            } else if (frame[i].y > target.y) {
-                if (frame[i+1].y < target.y)
+            } else if (frame[i].y()> target.y()) {
+                if (frame[i+1].y()< target.y())
                     --w;
-                else if (frame[i+1].y == target.y)
+                else if (frame[i+1].y()== target.y())
                     --hw;
-            } else if (frame[i].y == target.y) {
-                if (frame[i+1].y > target.y)
+            } else if (frame[i].y()== target.y()) {
+                if (frame[i+1].y()> target.y())
                     ++hw;
-                else if (frame[i+1].y < target.y)
+                else if (frame[i+1].y()< target.y())
                     --hw;
             }
         }
@@ -88,64 +101,73 @@ int winding_number(const Vector2D &target, const std::vector<Vector2D> &frame)
     return w + hw/2 + hw%2;
 }
 
-void plot_square(const Vector2D &p, const Vector2D &h)
+void plot_pixel(const Vector2i &p, const Vector2d &h)
 {
     std::cout << "set object rect from "
-              << p.x*h.x << "," << p.y*h.y
+              << p.x() * h.x() << "," << p.y() * h.y()
               << " to "
-              << (p.x + 1.0)*h.x << "," << (p.y + 1.0)*h.y
+              << (p.x() + 1.0) * h.x() << "," << (p.y() + 1.0) * h.y()
               << std::endl;
     // std::cerr << p.x*h.x << " " << p.y*h.y << std::endl;
 }
 
-void plot_point(const Vector2D &p, const Vector2D &h)
+Vector2d operator/(const Vector2d &a, const Vector2d &b)
 {
-    const Vector2D p_grid = p / h;
-    const Vector2D p_cell = p_grid.floor();
-    std::cerr << "origin: " << p << std::endl;
-    std::cerr << "guarantee: " << p_cell * h << std::endl;
-    plot_square(p_cell, h);
-    if (are_equal(p_grid.x, p_cell.x))
-        plot_square(Vector2D(p_cell.x - 1.0, p_cell.y), h);
-    if (are_equal(p_grid.y, p_cell.y))
-        plot_square(Vector2D(p_cell.x, p_cell.y - 1.0), h);
-    if (p_grid == p_cell)
-        plot_square(p_cell - Vector2D(1.0, 1.0), h);
+    return Vector2d(a.x()/b.x(), a.y()/b.y());
 }
 
-void plot_line(const Vector2D &A, const Vector2D &B, const Vector2D &h)
+Vector2i floorize(const Vector2d &a)
 {
-    const Vector2D *begin = &A;
-    const Vector2D *end = &B;
-    if (B.x < A.x || (are_equal(A.x, B.x) && B.y < A.y)) {
+    return Vector2i(floor_eps(a.x()), floor_eps(a.y()));
+}
+
+void plot_pixels(const Vector2d &p, const Vector2d &h, vecset &pixels)
+{
+    const Vector2d p_grid = p / h;
+    const Vector2i p_cell = floorize(p_grid);
+    pixels.insert(p_cell);
+    if (are_equal(p_grid.x(), p_cell.x()))
+        pixels.insert(Vector2i(p_cell.x() - 1, p_cell.y()));
+    if (are_equal(p_grid.y(), p_cell.y()))
+        pixels.insert(Vector2i(p_cell.x(), p_cell.y() - 1));
+    if (floorize(p_grid) == p_cell)
+        pixels.insert(Vector2i(p_cell.x() - 1, p_cell.y() - 1));
+}
+
+void plot_line(const Vector2d &A, const Vector2d &B, const Vector2d &h, vecset &pixels)
+{
+    const Vector2d *begin = &A;
+    const Vector2d *end = &B;
+    if (B.x() < A.x() || (are_equal(A.x(), B.x()) && B.y() < A.y())) {
         begin = &B;
         end = &A;
     }
 
-    plot_point(*begin, h);
-    plot_point(*end, h);
+    plot_pixels(*begin, h, pixels);
+    plot_pixels(*end, h, pixels);
 
     // implementation of John Amanatides & Andrew Woo ray casting algorithm
     // terms: u + v*t  <=>  origin + guide * t
-    Vector2D origin = *begin;
-    const Vector2D guide = *end - *begin;
-    const int dy = guide.y < 0 ? -1 : 1;
+    Vector2d origin = *begin;
+    const Vector2d guide = *end - *begin;
+    const int dy = guide.y() < 0 ? -1 : 1;
 
-    const Vector2D end_cell = end->floor(h);
+    const Vector2i end_cell = floorize(*end / h);
 
     int i = 0;
-    while (origin.floor(h) != end_cell && i < 50) {
-        const Vector2D origin_aligned = origin.floor(h) * h;
-        const Vector2D grid_node = origin_aligned + Vector2D(h.x, dy * h.y);
-        const Vector2D distance_s = (grid_node - origin) / guide;
-        const Vector2D distance_u(std::abs(distance_s.x), std::abs(distance_s.y));
-        if (distance_u.x < distance_u.y)
-            origin = {grid_node.x, origin.y + distance_u.x * guide.y};
-        else if (distance_u.x > distance_u.y)
-            origin = {origin.x + distance_u.y * guide.x, grid_node.y};
+    while (floorize(origin / h) != end_cell && i < 50) {
+        const Vector2i origin_cell = floorize(origin / h);
+        const Vector2d origin_aligned = Vector2d(origin_cell.x() * h.x(), origin_cell.y() * h.y());
+        const Vector2d grid_node = origin_aligned + Vector2d(h.x(), dy * h.y());
+        const Vector2d distance_s = (grid_node - origin) / guide;
+        const Vector2d distance_u(std::abs(distance_s.x()), std::abs(distance_s.y()));
+        if (distance_u.x() < distance_u.y())
+            origin = {grid_node.x(), origin.y() + distance_u.x() * guide.y()};
+        else if (distance_u.x() > distance_u.y())
+            origin = {origin.x() + distance_u.y() * guide.x(), grid_node.y()};
         else
             origin = grid_node;
-        plot_point(origin, h);
+        plot_pixels(origin, h, pixels);
         ++i;
     }
 
@@ -160,9 +182,9 @@ int main(int argc, char **argv)
     library.insert(Evaluator::default_library.begin(),
                    Evaluator::default_library.end());
 
-    Vector2D step_space(0.023, 0.067);
-    std::vector<Vector2D> path;
-    std::vector<Vector2D> frame;
+    Vector2d step_space(0.023, 0.067);
+    std::vector<Vector2d> path;
+    std::vector<Vector2d> frame;
 
     std::string expr_path_x;
     std::string expr_path_y;
@@ -191,20 +213,21 @@ int main(int argc, char **argv)
             frame_tau = std::strtod(argv[i+5], nullptr);
         }
         else if (par == "--cell") {
-            step_space.x = std::strtod(argv[i+1], nullptr);
-            step_space.y = std::strtod(argv[i+2], nullptr);
+            step_space.x() = std::strtod(argv[i+1], nullptr);
+            step_space.y() = std::strtod(argv[i+2], nullptr);
         }
     }
 
     path = expr_path_x.empty() ? read_polygon() : subdivide(expr_path_x, expr_path_y, library, false, path_ta, path_tb, path_tau);
     frame = expr_frame_x.empty() ? read_polygon() : subdivide(expr_frame_x, expr_frame_y, library, false, frame_ta, frame_tb, frame_tau);
 
+    vecset pixels;
     std::cout << "unset object" << std::endl;
     for (int i = 0; i < path.size() - 1; ++i) {
         const bool is_inside = (winding_number(path[i], frame) != 0 &&
                                 winding_number(path[i+1], frame) != 0);
         if (is_inside)
-            plot_line(path[i], path[i+1], step_space);
+            plot_line(path[i], path[i+1], step_space, pixels);
         else {
             std::cerr << "Out of bounds at " << path[i] << " -> " << path[i+1] << std::endl;
             break;
@@ -213,13 +236,17 @@ int main(int argc, char **argv)
 
     std::cout << "$path << e" << std::endl;
     for (int i = 0; i < path.size(); ++i)
-        std::cout << path[i] << std::endl;
+        std::cout << path[i].x() << " " << path[i].y() << std::endl;
     std::cout << "e" << std::endl;
     std::cout << "$frame << e" << std::endl;
     for (int i = 0; i < frame.size(); ++i)
-        std::cout << frame[i] << std::endl;
+        std::cout << frame[i].x() << " " << frame[i].y() << std::endl;
     std::cout << "e" << std::endl;
     std::cout << "plot $path with lines ls 1, $frame with lines ls 2" << std::endl;
+
+    for (const Vector2i &pixel: pixels) {
+        plot_pixel(pixel, step_space);
+    }
 
     return 0;
 }
